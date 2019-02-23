@@ -46,7 +46,7 @@ $RUN_WRAPPER ./target/out/alloc_example
 
 if [[ "$HOST_TRIPLE" = "$TARGET_TRIPLE" ]]; then
     echo "[JIT] std_example"
-    CG_CLIF_JIT=1 $RUSTC --crate-type bin -Cprefer-dynamic example/std_example.rs --target $HOST_TRIPLE
+    CG_CLIF_JIT=1 $RUSTC --crate-type bin -Cprefer-dynamic example/std_example.rs --target $HOST_TRIPLE -Z force-overflow-checks=off
 else
     echo "[JIT] std_example (skipped)"
 fi
@@ -57,7 +57,7 @@ $RUSTC example/dst-field-align.rs --crate-name dst_field_align --crate-type bin 
 $RUN_WRAPPER ./target/out/dst_field_align || (echo $?; false)
 
 echo "[AOT] std_example"
-$RUSTC example/std_example.rs --crate-type bin --target $TARGET_TRIPLE
+$RUSTC example/std_example.rs --crate-type bin --target $TARGET_TRIPLE -Z force-overflow-checks=off
 $RUN_WRAPPER ./target/out/std_example arg
 
 echo "[AOT] subslice-patterns-const-eval"
@@ -71,54 +71,99 @@ $RUN_WRAPPER ./target/out/track-caller-attribute
 echo "[BUILD] mod_bench"
 $RUSTC example/mod_bench.rs --crate-type bin --target $TARGET_TRIPLE
 
-pushd simple-raytracer
-if [[ "$HOST_TRIPLE" = "$TARGET_TRIPLE" ]]; then
-    echo "[BENCH COMPILE] ebobby/simple-raytracer"
-    hyperfine --runs ${RUN_RUNS:-10} --warmup 1 --prepare "cargo clean" \
-    "RUSTFLAGS='' cargo build" \
-    "../cargo.sh build"
+git clone https://github.com/rust-lang/rust.git --single-branch || true
+cd rust
+git fetch
+git checkout -f $(rustc -V | cut -d' ' -f3 | tr -d '(')
+export RUSTFLAGS=
+export CG_CLIF_DISPLAY_CG_TIME=
 
-    echo "[BENCH RUN] ebobby/simple-raytracer"
-    cp ./target/debug/main ./raytracer_cg_clif
-    hyperfine --runs ${RUN_RUNS:-10} ./raytracer_cg_llvm ./raytracer_cg_clif
-else
-    echo "[BENCH COMPILE] ebobby/simple-raytracer (skipped)"
-    echo "[COMPILE] ebobby/simple-raytracer"
-    ../cargo.sh build
-    echo "[BENCH RUN] ebobby/simple-raytracer (skipped)"
-fi
-popd
 
-pushd build_sysroot/sysroot_src/src/libcore/tests
-echo "[TEST] libcore"
-rm -r ./target || true
-../../../../../cargo.sh test
-popd
 
-pushd regex
-echo "[TEST] rust-lang/regex example shootout-regex-dna"
-../cargo.sh clean
-# Make sure `[codegen mono items] start` doesn't poison the diff
-../cargo.sh build --example shootout-regex-dna
-cat examples/regexdna-input.txt | ../cargo.sh run --example shootout-regex-dna | grep -v "Spawned thread" > res.txt
-diff -u res.txt examples/regexdna-output.txt
+rm config.toml || true
 
-echo "[TEST] rust-lang/regex tests"
-../cargo.sh test --tests -- --exclude-should-panic --test-threads 1 -Zunstable-options
-popd
+cat > config.toml <<EOF
+[rust]
+codegen-backends = []
+deny-warnings = false
+[build]
+local-rebuild = true
+rustc = "$HOME/.rustup/toolchains/$(cat ../rust-toolchain)-$TARGET_TRIPLE/bin/rustc"
+EOF
 
-echo
-echo "[BENCH COMPILE] mod_bench"
+cargo install ripgrep
 
-COMPILE_MOD_BENCH_INLINE="$RUSTC example/mod_bench.rs --crate-type bin -Zmir-opt-level=3 -O --crate-name mod_bench_inline"
-COMPILE_MOD_BENCH_LLVM_0="rustc example/mod_bench.rs --crate-type bin -Copt-level=0 -o target/out/mod_bench_llvm_0 -Cpanic=abort"
-COMPILE_MOD_BENCH_LLVM_1="rustc example/mod_bench.rs --crate-type bin -Copt-level=1 -o target/out/mod_bench_llvm_1 -Cpanic=abort"
-COMPILE_MOD_BENCH_LLVM_2="rustc example/mod_bench.rs --crate-type bin -Copt-level=2 -o target/out/mod_bench_llvm_2 -Cpanic=abort"
-COMPILE_MOD_BENCH_LLVM_3="rustc example/mod_bench.rs --crate-type bin -Copt-level=3 -o target/out/mod_bench_llvm_3 -Cpanic=abort"
+git checkout $(rustc -V | cut -d' ' -f3 | tr -d '(') src/test
+rm -r src/test/ui/{abi/,extern/,panics/,unsized-locals/,thinlto/,simd*,*lto*.rs,linkage*,unwind-*.rs,duplicate/} || true
+for test in $(rg --files-with-matches "asm!|catch_unwind|should_panic|lto" src/test/ui); do
+  rm $test
+done
 
-# Use 100 runs, because a single compilations doesn't take more than ~150ms, so it isn't very slow
-hyperfine --runs ${COMPILE_RUNS:-100} "$COMPILE_MOD_BENCH_INLINE" "$COMPILE_MOD_BENCH_LLVM_0" "$COMPILE_MOD_BENCH_LLVM_1" "$COMPILE_MOD_BENCH_LLVM_2" "$COMPILE_MOD_BENCH_LLVM_3"
+for test in $(rg --files-with-matches "//~.*ERROR|//~.*NOTE|// error-pattern:|// build-fail" src/test/ui); do
+  rm $test
+done
 
-echo
-echo "[BENCH RUN] mod_bench"
-hyperfine --runs ${RUN_RUNS:-10} ./target/out/mod_bench{,_inline} ./target/out/mod_bench_llvm_*
+git checkout -- src/test/ui/issues/auxiliary/issue-3136-a.rs # contains //~ERROR, but shouldn't be removed
+
+# these all depend on unwinding support
+rm src/test/ui/backtrace.rs
+rm src/test/ui/intrinsics/intrinsic-move-val-cleanups.rs
+rm src/test/ui/array-slice-vec/box-of-array-of-drop-*.rs
+rm src/test/ui/array-slice-vec/slice-panic-*.rs
+rm src/test/ui/array-slice-vec/nested-vec-3.rs
+rm src/test/ui/cleanup-rvalue-temp-during-incomplete-alloc.rs
+rm src/test/ui/issues/issue-26655.rs
+rm src/test/ui/issues/issue-29485.rs
+rm src/test/ui/issues/issue-30018-panic.rs
+rm src/test/ui/multi-panic.rs
+rm src/test/ui/sepcomp/sepcomp-unwind.rs
+rm src/test/ui/structs-enums/unit-like-struct-drop-run.rs
+rm src/test/ui/terminate-in-initializer.rs
+rm src/test/ui/threads-sendsync/task-stderr.rs
+rm src/test/ui/numbers-arithmetic/int-abs-overflow.rs
+rm src/test/ui/drop/drop-trait-enum.rs
+rm src/test/ui/issues/issue-8460.rs
+
+# these all use ByScalarPair type as extern "C" function parameter => warning
+rm src/test/ui/rust-2018/proc-macro-crate-in-paths.rs
+rm src/test/ui/proc-macro/crt-static.rs
+rm src/test/ui/proc-macro/no-missing-docs.rs
+rm src/test/ui/mir/mir_codegen_calls.rs
+
+rm src/test/ui/issues/issue-28950.rs # depends on stack size optimizations
+rm src/test/ui/init-large-type.rs # same
+rm src/test/ui/sse2.rs # cpuid not supported, so sse2 not detected
+rm src/test/ui/issues/issue-33992.rs # unsupported linkages
+rm src/test/ui/issues/issue-51947.rs # same
+rm src/test/ui/impl-trait/impl-generic-mismatch.rs # same
+rm src/test/ui/issues/issue-21160.rs # same
+rm src/test/ui/numbers-arithmetic/saturating-float-casts.rs # intrinsic gives different but valid result
+rm src/test/ui/mir/mir_misc_casts.rs # depends on deduplication of constants
+rm src/test/ui/mir/mir_raw_fat_ptr.rs # same
+rm src/test/ui/consts/const-str-ptr.rs # same
+rm src/test/ui/async-await/async-fn-size-moved-locals.rs # -Cpanic=abort shrinks some generator by one byte
+rm src/test/ui/async-await/async-fn-size-uninit-locals.rs # same
+rm src/test/ui/generator/size-moved-locals.rs # same
+rm src/test/ui/fn/dyn-fn-alignment.rs # wants a 256 byte alignment
+rm src/test/ui/consts/const_in_pattern/issue-73431.rs # gives warning for RUSTC_LOG=warn
+rm src/test/ui/test-attrs/test-fn-signature-verification-for-explicit-return-type.rs # "Cannot run dynamic test fn out-of-process"
+rm src/test/ui/intrinsics/intrinsic-nearby.rs # unimplemented nearbyintf32 and nearbyintf64 intrinsics
+
+rm src/test/incremental/hashes/inline_asm.rs # inline asm
+rm src/test/incremental/issue-72386.rs # same
+rm src/test/incremental/change_crate_dep_kind.rs # requires -Cpanic=unwind
+rm src/test/incremental/issue-49482.rs # same
+rm src/test/incremental/issue-54059.rs # same
+rm src/test/incremental/hashes/statics.rs # unsupported linkages
+rm src/test/incremental/hashes/function_interfaces.rs # same
+rm src/test/incremental/lto.rs # requires lto
+
+rm src/test/pretty/asm.rs # inline asm
+rm src/test/pretty/raw-str-nonexpr.rs # same
+
+rm -r src/test/run-pass-valgrind/unsized-locals
+
+RUSTC_ARGS="-Zpanic-abort-tests -Zcodegen-backend="$(pwd)"/../target/"$CHANNEL"/librustc_codegen_cranelift."$dylib_ext" --sysroot "$(pwd)"/../build_sysroot/sysroot -Cpanic=abort"
+
+echo "[TEST] rustc test suite"
+./x.py test --stage 0 src/test/{codegen-units,incremental,pretty,run-make,run-pass-valgrind,ui} --rustc-args "$RUSTC_ARGS" 2>&1 | tee log.txt

@@ -2,7 +2,7 @@
 
 use std::arch::x86_64::*;
 use std::io::Write;
-use std::ops::Generator;
+use std::ops::{Generator, Shl};
 
 fn main() {
     println!("{:?}", std::env::args().collect::<Vec<_>>());
@@ -117,7 +117,19 @@ fn main() {
         1 => (),
         0 => loop {},
         v => panic(v),
-    };
+    }
+
+    if u8::shl(1, 9) != 2_u8 {
+        unsafe { std::intrinsics::abort(); }
+    }
+
+    /*const STR: &'static str = "hello";
+    fn other_casts() -> *const str {
+        STR as *const str
+    }
+    if other_casts() != STR as *const str {
+        unsafe { std::intrinsics::abort(); }
+    }*/
 }
 
 fn panic(_: u128) {
