@@ -241,19 +241,22 @@ fn main() {
 
     assert_eq!(((|()| 42u8) as fn(()) -> u8)(()), 42);
 
-    extern {
-        #[linkage = "extern_weak"]
-        static ABC: *const u8;
-    }
-
+    #[cfg(not(jit))]
     {
         extern {
-            #[linkage = "extern_weak"]
+            #[linkage = "weak"]
             static ABC: *const u8;
         }
-    }
 
-    unsafe { assert_eq!(ABC as usize, 0); }
+        {
+            extern {
+                #[linkage = "weak"]
+                static ABC: *const u8;
+            }
+        }
+
+        unsafe { assert_eq!(ABC as usize, 0); }
+    }
 
     &mut (|| Some(0 as *const ())) as &mut dyn FnMut() -> Option<*const ()>;
 
@@ -284,26 +287,6 @@ fn main() {
 
     #[cfg(not(jit))]
     test_tls();
-
-    #[cfg(all(not(jit), target_os = "linux"))]
-    unsafe {
-        global_asm_test();
-    }
-}
-
-#[cfg(all(not(jit), target_os = "linux"))]
-extern "C" {
-    fn global_asm_test();
-}
-
-#[cfg(all(not(jit), target_os = "linux"))]
-global_asm! {
-    "
-    .global global_asm_test
-    global_asm_test:
-    // comment that would normally be removed by LLVM
-    ret
-    "
 }
 
 #[repr(C)]
