@@ -278,14 +278,14 @@ fn data_id_for_static(
             .declare_data(
                 &ref_name,
                 Linkage::Local,
-                is_mutable,
-                attrs.flags.contains(CodegenFnAttrFlags::THREAD_LOCAL),
+                true,
+                false,
                 Some(align.try_into().unwrap()),
             )
             .unwrap();
         let mut data_ctx = DataContext::new();
         let data = module.declare_data_in_data(data_id, &mut data_ctx);
-        data_ctx.define_zeroinit(pointer_ty(tcx).bytes() as usize);
+        data_ctx.define(std::iter::repeat(0).take(pointer_ty(tcx).bytes() as usize).collect());
         data_ctx.write_data_addr(0, data, 0);
         match module.define_data(ref_data_id, &data_ctx) {
             // Every time the static is referenced there will be another definition of this global,

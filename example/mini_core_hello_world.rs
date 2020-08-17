@@ -138,13 +138,13 @@ fn main() {
     #[cfg(not(jit))]
     {
         extern {
-            #[linkage = "weak"]
+            #[linkage = "extern_weak"]
             static ABC: *const u8;
         }
 
         {
             extern {
-                #[linkage = "weak"]
+                #[linkage = "extern_weak"]
                 static ABC: *const u8;
             }
         }
