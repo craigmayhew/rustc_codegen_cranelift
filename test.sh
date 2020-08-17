@@ -30,7 +30,8 @@ fi
 
 echo "[AOT] mini_core_hello_world"
 $RUSTC example/mini_core_hello_world.rs --crate-name mini_core_hello_world --crate-type bin -g --target $TARGET_TRIPLE
-$RUN_WRAPPER ./target/out/mini_core_hello_world abc bcd
+dyldinfo -bind example/mini_core_hello_world
+lldb -o "run" -o "bt" -o "dis" -- ./target/out/mini_core_hello_world abc bcd
 # (echo "break set -n main"; echo "run"; sleep 1; echo "si -c 10"; sleep 1; echo "frame variable") | lldb -- ./target/out/mini_core_hello_world abc bcd
 
 echo "[AOT] arbitrary_self_types_pointers_and_wrappers"
@@ -58,8 +59,7 @@ $RUN_WRAPPER ./target/out/dst_field_align || (echo $?; false)
 
 echo "[AOT] std_example"
 $RUSTC example/std_example.rs --crate-type bin --target $TARGET_TRIPLE
-dyldinfo -bind example/std_example.rs
-lldb -o "run" -o "bt" -o "dis" -- ./target/out/std_example arg
+$RUN_WRAPPER ./target/out/std_example arg
 
 echo "[AOT] subslice-patterns-const-eval"
 $RUSTC example/subslice-patterns-const-eval.rs --crate-type bin -Cpanic=abort --target $TARGET_TRIPLE
