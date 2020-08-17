@@ -30,7 +30,7 @@ fi
 
 echo "[AOT] mini_core_hello_world"
 $RUSTC example/mini_core_hello_world.rs --crate-name mini_core_hello_world --crate-type bin -g --target $TARGET_TRIPLE
-dyldinfo -bind example/mini_core_hello_world
+#dyldinfo -bind example/mini_core_hello_world
 lldb -o "run" -o "bt" -o "dis" -- ./target/out/mini_core_hello_world abc bcd
 # (echo "break set -n main"; echo "run"; sleep 1; echo "si -c 10"; sleep 1; echo "frame variable") | lldb -- ./target/out/mini_core_hello_world abc bcd
 
