@@ -255,6 +255,7 @@ fn main() {
             }
         }
 
+        unsafe { printf("ABC = %p\n\0" as *const str as *const i8, ABC); }
         unsafe { assert_eq!(ABC as usize, 0); }
     }
 
