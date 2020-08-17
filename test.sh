@@ -31,10 +31,10 @@ fi
 echo "[AOT] mini_core_hello_world"
 $RUSTC example/mini_core_hello_world.rs --crate-name mini_core_hello_world --crate-type bin -g --target $TARGET_TRIPLE
 #dyldinfo -bind example/mini_core_hello_world
-objdump -t example/mini_core_hello_world || true
-objdump -weak-bind example/mini_core_hello_world || true
-objdump -indirect-symbols example/mini_core_hello_world || true
-objdump -r example/mini_core_hello_world || true
+objdump -t target/out/mini_core_hello_world || true
+objdump -weak-bind target/out/mini_core_hello_world || true
+objdump -indirect-symbols target/out/mini_core_hello_world || true
+objdump -r target/out/mini_core_hello_world || true
 lldb -O "set set target.disable-aslr false" -o "run" -o "bt" -o "dis" -- ./target/out/mini_core_hello_world abc bcd
 # (echo "break set -n main"; echo "run"; sleep 1; echo "si -c 10"; sleep 1; echo "frame variable") | lldb -- ./target/out/mini_core_hello_world abc bcd
 
