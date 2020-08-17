@@ -37,8 +37,8 @@ objdump --indirect-symbols target/out/mini_core_hello_world || true
 objdump -r target/out/mini_core_hello_world || true
 objdump --disassemble target/out/mini_core_hello_world || true
 
-objdump -t mini_core_hello_world.*.o
-objdump --disassemble-all mini_core_hello_world.*.o
+objdump -t target/out/mini_core_hello_world.*.o
+objdump --disassemble-all target/out/mini_core_hello_world.*.o
 
 lldb -O "set set target.disable-aslr false" -o "run" -o "bt" -o "dis" -- ./target/out/mini_core_hello_world abc bcd
 # (echo "break set -n main"; echo "run"; sleep 1; echo "si -c 10"; sleep 1; echo "frame variable") | lldb -- ./target/out/mini_core_hello_world abc bcd
